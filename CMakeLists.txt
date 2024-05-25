@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(Hello LANGUAGES CXX CUDA)
+project(HelloWMMA LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 11)
@@ -57,4 +57,4 @@ set(gemm_src
 add_library(gemm SHARED ${gemm_src})
 target_compile_definitions(gemm PRIVATE BUILDING_DLL)
 add_executable(test ${CMAKE_CURRENT_SOURCE_DIR}/src/test.cu)
-target_link_libraries(test2 gemm)
+target_link_libraries(test gemm)
