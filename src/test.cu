@@ -11,7 +11,7 @@ __device__ void print_CUDA_ARCH_() {
 }
 
 __global__ void print_CUDA_ARCH() { print_CUDA_ARCH_(); }
-void test_row_major(TensorKenerlType t = TensorKenerl_16_16_16) {
+void test_row_major(FP16TensorKenerlType t = TensorKenerl_16_16_16) {
   const int M = 15;
   const int N = 17;
   const int K = 17;
@@ -51,7 +51,7 @@ void test_row_major(TensorKenerlType t = TensorKenerl_16_16_16) {
     printf("\n");
   }
 }
-void test_col_major(TensorKenerlType t = TensorKenerl_16_16_16) {
+void test_col_major(FP16TensorKenerlType t = TensorKenerl_16_16_16) {
   const int M = 15;
   const int N = 17;
   const int K = 17;

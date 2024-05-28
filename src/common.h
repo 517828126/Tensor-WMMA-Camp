@@ -2,7 +2,7 @@
 #define COMMON_H
 #include "utils.h"
 #include <mma.h>
-enum TensorKenerlType {
+enum FP16TensorKenerlType {
   TensorKenerl_16_16_16 = 0,
   TensorKenerl_8_32_16,
   TensorKenerl_32_8_16
