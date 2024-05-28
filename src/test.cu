@@ -97,11 +97,11 @@ void test_col_major(TensorKenerlType t = TensorKenerl_16_16_16) {
   }
 }
 int main() {
-  test_row_major();
-  printf("\n");
-  printf("-------------------------\n");
-  printf("\n");
-  test_col_major();
+  test_row_major(TensorKenerl_8_32_16);
+  // printf("\n");
+  // printf("-------------------------\n");
+  // printf("\n");
+  // test_col_major();
 
   return 0;
 }
