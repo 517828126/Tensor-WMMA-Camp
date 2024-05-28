@@ -89,7 +89,7 @@ void copy_and_cast_data_to_device(const A* a, const B* b, int M, int N, int K,
     CUDA_CHECK(cudaMemcpy(dev_src_a + i * k, host_a + i * K, K * sizeof(A),
                           cudaMemcpyHostToDevice));
   }
-  matrix_cast_kernel<<<block_a, WARP_SIZE>>>(dev_src_a, dev_a, m, k, false);
+  matrix_cast_kernel<<<block_a, WARP_SIZE>>>(dev_a, dev_src_a, m, k, false);
   if (!matrix_b_is_col_major) {
     for (int i = 0; i < K; ++i) {
       CUDA_CHECK(cudaMemcpy(dev_src_b + i * n, host_b + i * N,
