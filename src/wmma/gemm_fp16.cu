@@ -75,17 +75,17 @@ int wmma_fp16(const float *a, const float *b, int M, int N, float *c, int K,
   }
   int kenerl_m = 0, kenerl_n = 0, kenerl_k = 0;
   switch (kenerl_type) {
-    case TensorKenerl_16_16_16:
+    case FP16TensorKenerlType::TensorKenerl_16_16_16:
       kenerl_m = 16;
       kenerl_n = 16;
       kenerl_k = 16;
       break;
-    case TensorKenerl_8_32_16:
+    case FP16TensorKenerlType::TensorKenerl_8_32_16:
       kenerl_m = 8;
       kenerl_n = 32;
       kenerl_k = 16;
       break;
-    case TensorKenerl_32_8_16:
+    case FP16TensorKenerlType::TensorKenerl_32_8_16:
       kenerl_m = 32;
       kenerl_n = 8;
       kenerl_k = 16;
@@ -106,15 +106,15 @@ int wmma_fp16(const float *a, const float *b, int M, int N, float *c, int K,
   copy_and_cast_data_to_device(a, b, M, N, K, dev_a, dev_b, m, n, k,
                                matrix_b_is_col_major);
   switch (kenerl_type) {
-    case TensorKenerl_16_16_16:
+    case FP16TensorKenerlType::TensorKenerl_16_16_16:
       wmma_fp16_kernel_16_16_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
                                                      k);
       break;
-    case TensorKenerl_8_32_16:
+    case FP16TensorKenerlType::TensorKenerl_8_32_16:
       wmma_fp16_kernel_8_32_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
                                                     k);
       break;
-    case TensorKenerl_32_8_16:
+    case FP16TensorKenerlType::TensorKenerl_32_8_16:
       wmma_fp16_kernel_32_8_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
                                                     k);
       break;
@@ -136,17 +136,17 @@ int wmma_fp16(const half *a, const half *b, int M, int N, float *c, int K,
   }
   int kenerl_m = 0, kenerl_n = 0, kenerl_k = 0;
   switch (kenerl_type) {
-    case TensorKenerl_16_16_16:
+    case FP16TensorKenerlType::TensorKenerl_16_16_16:
       kenerl_m = 16;
       kenerl_n = 16;
       kenerl_k = 16;
       break;
-    case TensorKenerl_8_32_16:
+    case FP16TensorKenerlType::TensorKenerl_8_32_16:
       kenerl_m = 8;
       kenerl_n = 32;
       kenerl_k = 16;
       break;
-    case TensorKenerl_32_8_16:
+    case FP16TensorKenerlType::TensorKenerl_32_8_16:
       kenerl_m = 32;
       kenerl_n = 8;
       kenerl_k = 16;
@@ -166,15 +166,15 @@ int wmma_fp16(const half *a, const half *b, int M, int N, float *c, int K,
   copy_data_to_device(a, b, M, N, K, dev_a, dev_b, m, n, k,
                       matrix_b_is_col_major);
   switch (kenerl_type) {
-    case TensorKenerl_16_16_16:
+    case FP16TensorKenerlType::TensorKenerl_16_16_16:
       wmma_fp16_kernel_16_16_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
                                                      k);
       break;
-    case TensorKenerl_8_32_16:
+    case FP16TensorKenerlType::TensorKenerl_8_32_16:
       wmma_fp16_kernel_8_32_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
                                                     k);
       break;
-    case TensorKenerl_32_8_16:
+    case FP16TensorKenerlType::TensorKenerl_32_8_16:
       wmma_fp16_kernel_32_8_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
                                                     k);
       break;
