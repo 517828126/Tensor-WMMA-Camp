@@ -11,7 +11,8 @@ __device__ void print_CUDA_ARCH_() {
 }
 
 __global__ void print_CUDA_ARCH() { print_CUDA_ARCH_(); }
-void test_row_major(FP16TensorKenerlType t = TensorKenerl_16_16_16) {
+void test_row_major(
+    FP16TensorKenerlType t = FP16TensorKenerlType::TensorKenerl_16_16_16) {
   const int M = 15;
   const int N = 17;
   const int K = 17;
@@ -51,7 +52,8 @@ void test_row_major(FP16TensorKenerlType t = TensorKenerl_16_16_16) {
     printf("\n");
   }
 }
-void test_col_major(FP16TensorKenerlType t = TensorKenerl_16_16_16) {
+void test_col_major(
+    FP16TensorKenerlType t = FP16TensorKenerlType::TensorKenerl_16_16_16) {
   const int M = 15;
   const int N = 17;
   const int K = 17;
@@ -97,7 +99,7 @@ void test_col_major(FP16TensorKenerlType t = TensorKenerl_16_16_16) {
   }
 }
 int main() {
-  test_row_major(TensorKenerl_8_32_16);
+  test_row_major(FP16TensorKenerlType::TensorKenerl_8_32_16);
   // printf("\n");
   // printf("-------------------------\n");
   // printf("\n");

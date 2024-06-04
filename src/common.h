@@ -2,7 +2,12 @@
 #define COMMON_H
 #include "utils.h"
 #include <mma.h>
-enum FP16TensorKenerlType {
+enum class FP16TensorKenerlType {
+  TensorKenerl_16_16_16 = 0,
+  TensorKenerl_8_32_16,
+  TensorKenerl_32_8_16
+};
+enum class BF16TensorKenerlType {
   TensorKenerl_16_16_16 = 0,
   TensorKenerl_8_32_16,
   TensorKenerl_32_8_16
@@ -17,6 +22,12 @@ __device__ void data_cast(const float& src, half& dst);
 
 template <>
 __device__ void data_cast(const double& src, half& dst);
+
+template <>
+__device__ void data_cast(const float& src, __nv_bfloat16& dst);
+
+template <>
+__device__ void data_cast(const double& src, __nv_bfloat16& dst);
 
 template <typename T>
 __global__ void matrix_transpose_kernel(T* dst, const T* src, size_t row,
