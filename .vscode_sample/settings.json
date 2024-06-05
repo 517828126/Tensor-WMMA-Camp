@@ -7,7 +7,7 @@
     "configureOnEdit": false,
     "configureOnOpen": false
   },
-  "cmake.configureArgs": ["-DBUILD_TEST=OFF"],
+  "cmake.configureArgs": [],
   "cmake.configureOnEdit": false,
   "cmake.configureOnOpen": false,
   "cmake.buildDirectory": "${workspaceFolder}/build-${buildType}",

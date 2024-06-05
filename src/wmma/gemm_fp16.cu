@@ -1,141 +1,191 @@
 #include "wmma_function.h"
-using namespace nvcuda;
-__global__ void wmma_fp16_kernel_16_16_16(const half *a, const half *b, int M,
-                                          int N, float *c, int K) {
-  size_t row = 16 * blockIdx.y;
-  size_t col = 16 * blockIdx.x;
+using namespace nvcuda ;
+
+template <int fragment_m, int fragment_n, int fragment_k>
+__global__ void wmma_fp16_kernel(const half *a, const half *b, int M, int N,
+                                 float *c, int K) {
+  size_t row = fragment_m * blockIdx.y;
+  size_t col = fragment_n * blockIdx.x;
 
   if (row >= M || col >= N) {
     return;
   }
 
-  wmma::fragment<wmma::accumulator, 16, 16, 16, float> c_frag;
+  wmma::fragment<wmma::accumulator, fragment_m, fragment_n, fragment_k, float> c_frag;
   wmma::fill_fragment(c_frag, 0.0f);
-  size_t loop_n = (K + 15) / 16;
+  size_t loop_n = (K + fragment_k - 1) / fragment_k;
 #pragma unroll
   for (size_t i = 0; i < loop_n; ++i) {
-    wmma::fragment<wmma::matrix_a, 16, 16, 16, half, wmma::row_major> a_frag;
-    wmma::fragment<wmma::matrix_b, 16, 16, 16, half, wmma::col_major> b_frag;
-    wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
-    wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
+    wmma::fragment<wmma::matrix_a, fragment_m, fragment_n, fragment_k, half, wmma::row_major> a_frag;
+    wmma::fragment<wmma::matrix_b, fragment_m, fragment_n, fragment_k, half, wmma::col_major> b_frag;
+    wmma::load_matrix_sync(a_frag, a + row * K + i * fragment_k, K);
+    wmma::load_matrix_sync(b_frag, b + col * K + i * fragment_k, K);
     wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
   }
   wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
 }
-__global__ void wmma_fp16_kernel_8_32_16(const half *a, const half *b, int M,
-                                         int N, float *c, int K) {
-  size_t row = 8 * blockIdx.y;
-  size_t col = 32 * blockIdx.x;
+
+template <int fragment_m, int fragment_n, int fragment_k>
+__global__ void wmma_fp16_kernel(const half *a, const half *b, int M, int N,
+                                 half *c, int K) {
+  size_t row = fragment_m * blockIdx.y;
+  size_t col = fragment_n * blockIdx.x;
 
   if (row >= M || col >= N) {
     return;
   }
 
-  wmma::fragment<wmma::accumulator, 8, 32, 16, float> c_frag;
+  wmma::fragment<wmma::accumulator, fragment_m, fragment_n, fragment_k, half> c_frag;
   wmma::fill_fragment(c_frag, 0.0f);
-  size_t loop_n = (K + 15) / 16;
+  size_t loop_n = (K + fragment_k - 1) / fragment_k;
 #pragma unroll
   for (size_t i = 0; i < loop_n; ++i) {
-    wmma::fragment<wmma::matrix_a, 8, 32, 16, half, wmma::row_major> a_frag;
-    wmma::fragment<wmma::matrix_b, 8, 32, 16, half, wmma::col_major> b_frag;
-    wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
-    wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
-    wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
-  }
-  wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
-}
-__global__ void wmma_fp16_kernel_32_8_16(const half *a, const half *b, int M,
-                                         int N, float *c, int K) {
-  size_t row = 32 * blockIdx.y;
-  size_t col = 8 * blockIdx.x;
-
-  if (row >= M || col >= N) {
-    return;
-  }
-
-  wmma::fragment<wmma::accumulator, 32, 8, 16, float> c_frag;
-  wmma::fill_fragment(c_frag, 0.0f);
-  size_t loop_n = (K + 15) / 16;
-#pragma unroll
-  for (size_t i = 0; i < loop_n; ++i) {
-    wmma::fragment<wmma::matrix_a, 32, 8, 16, half, wmma::row_major> a_frag;
-    wmma::fragment<wmma::matrix_b, 32, 8, 16, half, wmma::col_major> b_frag;
-    wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
-    wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
+    wmma::fragment<wmma::matrix_a, fragment_m, fragment_n, fragment_k, half, wmma::row_major> a_frag;
+    wmma::fragment<wmma::matrix_b, fragment_m, fragment_n, fragment_k, half, wmma::col_major> b_frag;
+    wmma::load_matrix_sync(a_frag, a + row * K + i * fragment_k, K);
+    wmma::load_matrix_sync(b_frag, b + col * K + i * fragment_k, K);
     wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
   }
   wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
 }
 
-__global__ void wmma_fp16_kernel_16_16_16(const half *a, const half *b, int M,
-                                          int N, half *c, int K) {
-  size_t row = 16 * blockIdx.y;
-  size_t col = 16 * blockIdx.x;
 
-  if (row >= M || col >= N) {
-    return;
-  }
+// __global__ void wmma_fp16_kernel_16_16_16(const half *a, const half *b, int M,
+//                                           int N, float *c, int K) {
+//   size_t row = 16 * blockIdx.y;
+//   size_t col = 16 * blockIdx.x;
 
-  wmma::fragment<wmma::accumulator, 16, 16, 16, half> c_frag;
-  wmma::fill_fragment(c_frag, 0.0f);
-  size_t loop_n = (K + 15) / 16;
-#pragma unroll
-  for (size_t i = 0; i < loop_n; ++i) {
-    wmma::fragment<wmma::matrix_a, 16, 16, 16, half, wmma::row_major> a_frag;
-    wmma::fragment<wmma::matrix_b, 16, 16, 16, half, wmma::col_major> b_frag;
-    wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
-    wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
-    wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
-  }
-  wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
-}
-__global__ void wmma_fp16_kernel_8_32_16(const half *a, const half *b, int M,
-                                         int N, half *c, int K) {
-  size_t row = 8 * blockIdx.y;
-  size_t col = 32 * blockIdx.x;
+//   if (row >= M || col >= N) {
+//     return;
+//   }
 
-  if (row >= M || col >= N) {
-    return;
-  }
+//   wmma::fragment<wmma::accumulator, 16, 16, 16, float> c_frag;
+//   wmma::fill_fragment(c_frag, 0.0f);
+//   size_t loop_n = (K + 15) / 16;
+// #pragma unroll
+//   for (size_t i = 0; i < loop_n; ++i) {
+//     wmma::fragment<wmma::matrix_a, 16, 16, 16, half, wmma::row_major> a_frag;
+//     wmma::fragment<wmma::matrix_b, 16, 16, 16, half, wmma::col_major> b_frag;
+//     wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
+//     wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
+//     wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
+//   }
+//   wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
+// }
+// __global__ void wmma_fp16_kernel_8_32_16(const half *a, const half *b, int M,
+//                                          int N, float *c, int K) {
+//   size_t row = 8 * blockIdx.y;
+//   size_t col = 32 * blockIdx.x;
 
-  wmma::fragment<wmma::accumulator, 8, 32, 16, half> c_frag;
-  wmma::fill_fragment(c_frag, 0.0f);
-  size_t loop_n = (K + 15) / 16;
-#pragma unroll
-  for (size_t i = 0; i < loop_n; ++i) {
-    wmma::fragment<wmma::matrix_a, 8, 32, 16, half, wmma::row_major> a_frag;
-    wmma::fragment<wmma::matrix_b, 8, 32, 16, half, wmma::col_major> b_frag;
-    wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
-    wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
-    wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
-  }
-  wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
-}
-__global__ void wmma_fp16_kernel_32_8_16(const half *a, const half *b, int M,
-                                         int N, half *c, int K) {
-  size_t row = 32 * blockIdx.y;
-  size_t col = 8 * blockIdx.x;
+//   if (row >= M || col >= N) {
+//     return;
+//   }
 
-  if (row >= M || col >= N) {
-    return;
-  }
+//   wmma::fragment<wmma::accumulator, 8, 32, 16, float> c_frag;
+//   wmma::fill_fragment(c_frag, 0.0f);
+//   size_t loop_n = (K + 15) / 16;
+// #pragma unroll
+//   for (size_t i = 0; i < loop_n; ++i) {
+//     wmma::fragment<wmma::matrix_a, 8, 32, 16, half, wmma::row_major> a_frag;
+//     wmma::fragment<wmma::matrix_b, 8, 32, 16, half, wmma::col_major> b_frag;
+//     wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
+//     wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
+//     wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
+//   }
+//   wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
+// }
+// __global__ void wmma_fp16_kernel_32_8_16(const half *a, const half *b, int M,
+//                                          int N, float *c, int K) {
+//   size_t row = 32 * blockIdx.y;
+//   size_t col = 8 * blockIdx.x;
 
-  wmma::fragment<wmma::accumulator, 32, 8, 16, half> c_frag;
-  wmma::fill_fragment(c_frag, 0.0f);
-  size_t loop_n = (K + 15) / 16;
-#pragma unroll
-  for (size_t i = 0; i < loop_n; ++i) {
-    wmma::fragment<wmma::matrix_a, 32, 8, 16, half, wmma::row_major> a_frag;
-    wmma::fragment<wmma::matrix_b, 32, 8, 16, half, wmma::col_major> b_frag;
-    wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
-    wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
-    wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
-  }
-  wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
-}
+//   if (row >= M || col >= N) {
+//     return;
+//   }
+
+//   wmma::fragment<wmma::accumulator, 32, 8, 16, float> c_frag;
+//   wmma::fill_fragment(c_frag, 0.0f);
+//   size_t loop_n = (K + 15) / 16;
+// #pragma unroll
+//   for (size_t i = 0; i < loop_n; ++i) {
+//     wmma::fragment<wmma::matrix_a, 32, 8, 16, half, wmma::row_major> a_frag;
+//     wmma::fragment<wmma::matrix_b, 32, 8, 16, half, wmma::col_major> b_frag;
+//     wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
+//     wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
+//     wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
+//   }
+//   wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
+// }
+
+// __global__ void wmma_fp16_kernel_16_16_16(const half *a, const half *b, int M,
+//                                           int N, half *c, int K) {
+//   size_t row = 16 * blockIdx.y;
+//   size_t col = 16 * blockIdx.x;
+
+//   if (row >= M || col >= N) {
+//     return;
+//   }
+
+//   wmma::fragment<wmma::accumulator, 16, 16, 16, half> c_frag;
+//   wmma::fill_fragment(c_frag, 0.0f);
+//   size_t loop_n = (K + 15) / 16;
+// #pragma unroll
+//   for (size_t i = 0; i < loop_n; ++i) {
+//     wmma::fragment<wmma::matrix_a, 16, 16, 16, half, wmma::row_major> a_frag;
+//     wmma::fragment<wmma::matrix_b, 16, 16, 16, half, wmma::col_major> b_frag;
+//     wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
+//     wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
+//     wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
+//   }
+//   wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
+// }
+// __global__ void wmma_fp16_kernel_8_32_16(const half *a, const half *b, int M,
+//                                          int N, half *c, int K) {
+//   size_t row = 8 * blockIdx.y;
+//   size_t col = 32 * blockIdx.x;
+
+//   if (row >= M || col >= N) {
+//     return;
+//   }
+
+//   wmma::fragment<wmma::accumulator, 8, 32, 16, half> c_frag;
+//   wmma::fill_fragment(c_frag, 0.0f);
+//   size_t loop_n = (K + 15) / 16;
+// #pragma unroll
+//   for (size_t i = 0; i < loop_n; ++i) {
+//     wmma::fragment<wmma::matrix_a, 8, 32, 16, half, wmma::row_major> a_frag;
+//     wmma::fragment<wmma::matrix_b, 8, 32, 16, half, wmma::col_major> b_frag;
+//     wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
+//     wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
+//     wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
+//   }
+//   wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
+// }
+// __global__ void wmma_fp16_kernel_32_8_16(const half *a, const half *b, int M,
+//                                          int N, half *c, int K) {
+//   size_t row = 32 * blockIdx.y;
+//   size_t col = 8 * blockIdx.x;
+
+//   if (row >= M || col >= N) {
+//     return;
+//   }
+
+//   wmma::fragment<wmma::accumulator, 32, 8, 16, half> c_frag;
+//   wmma::fill_fragment(c_frag, 0.0f);
+//   size_t loop_n = (K + 15) / 16;
+// #pragma unroll
+//   for (size_t i = 0; i < loop_n; ++i) {
+//     wmma::fragment<wmma::matrix_a, 32, 8, 16, half, wmma::row_major> a_frag;
+//     wmma::fragment<wmma::matrix_b, 32, 8, 16, half, wmma::col_major> b_frag;
+//     wmma::load_matrix_sync(a_frag, a + row * K + i * 16, K);
+//     wmma::load_matrix_sync(b_frag, b + col * K + i * 16, K);
+//     wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
+//   }
+//   wmma::store_matrix_sync(c + row * N + col, c_frag, N, wmma::mem_row_major);
+// }
 
 int wmma_fp16(const float *a, const float *b, int M, int N, float *c, int K,
-              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type) {
+              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type,bool need_pinned_memory) {
   if (M < 0 || N < 0 || K < 0) {
     return -1;
   }
@@ -173,21 +223,29 @@ int wmma_fp16(const float *a, const float *b, int M, int N, float *c, int K,
                                matrix_b_is_col_major);
   switch (kenerl_type) {
     case FP16TensorKenerlType::TensorKenerl_16_16_16:
-      wmma_fp16_kernel_16_16_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
-                                                     k);
+      wmma_fp16_kernel<16,16,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
     case FP16TensorKenerlType::TensorKenerl_8_32_16:
-      wmma_fp16_kernel_8_32_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
-                                                    k);
+      wmma_fp16_kernel<8,32,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
     case FP16TensorKenerlType::TensorKenerl_32_8_16:
-      wmma_fp16_kernel_32_8_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
-                                                    k);
+      wmma_fp16_kernel<32,8,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
   }
-  for (int i = 0; i < M; ++i) {
-    CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(float),
-                          cudaMemcpyDeviceToHost));
+  if(need_pinned_memory){
+    float* host_c;
+    CUDA_CHECK(cudaMallocHost((void**)(&host_c), M * N * sizeof(float)));
+    for (int i = 0; i < M; ++i) {
+      CUDA_CHECK(cudaMemcpy(host_c + i * N, dev_c + i * n, N * sizeof(float),
+                            cudaMemcpyDeviceToHost));
+    }    
+    memcpy(c, host_c, M * N * sizeof(float));
+    CUDA_CHECK(cudaFreeHost(host_c));
+  }else{
+    for (int i = 0; i < M; ++i) {
+      CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(float),
+                            cudaMemcpyDeviceToHost));
+    }
   }
   CUDA_CHECK(cudaFree(dev_a));
   CUDA_CHECK(cudaFree(dev_b));
@@ -196,7 +254,7 @@ int wmma_fp16(const float *a, const float *b, int M, int N, float *c, int K,
 }
 
 int wmma_fp16(const half *a, const half *b, int M, int N, float *c, int K,
-              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type) {
+              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type,bool need_pinned_memory) {
   if (M < 0 || N < 0 || K < 0) {
     return -1;
   }
@@ -233,22 +291,30 @@ int wmma_fp16(const half *a, const half *b, int M, int N, float *c, int K,
                       matrix_b_is_col_major);
   switch (kenerl_type) {
     case FP16TensorKenerlType::TensorKenerl_16_16_16:
-      wmma_fp16_kernel_16_16_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
-                                                     k);
+      wmma_fp16_kernel<16,16,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
     case FP16TensorKenerlType::TensorKenerl_8_32_16:
-      wmma_fp16_kernel_8_32_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
-                                                    k);
+      wmma_fp16_kernel<8,32,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
     case FP16TensorKenerlType::TensorKenerl_32_8_16:
-      wmma_fp16_kernel_32_8_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
-                                                    k);
+      wmma_fp16_kernel<32,8,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
   }
-  for (int i = 0; i < M; ++i) {
-    CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(float),
-                          cudaMemcpyDeviceToHost));
-  }
+  if(need_pinned_memory){
+    float* host_c;
+    CUDA_CHECK(cudaMallocHost((void**)(&host_c), M * N * sizeof(float)));
+    for (int i = 0; i < M; ++i) {
+      CUDA_CHECK(cudaMemcpy(host_c + i * N, dev_c + i * n, N * sizeof(float),
+                            cudaMemcpyDeviceToHost));
+    }    
+    memcpy(c, host_c, M * N * sizeof(float));
+    CUDA_CHECK(cudaFreeHost(host_c));
+  }else{
+    for (int i = 0; i < M; ++i) {
+      CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(float),
+                            cudaMemcpyDeviceToHost));
+    }
+  }  
   CUDA_CHECK(cudaFree(dev_a));
   CUDA_CHECK(cudaFree(dev_b));
   CUDA_CHECK(cudaFree(dev_c));
@@ -256,7 +322,7 @@ int wmma_fp16(const half *a, const half *b, int M, int N, float *c, int K,
 }
 
 int wmma_fp16(const half *a, const half *b, int M, int N, half *c, int K,
-              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type) {
+              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type,bool need_pinned_memory) {
   if (M < 0 || N < 0 || K < 0) {
     return -1;
   }
@@ -293,22 +359,33 @@ int wmma_fp16(const half *a, const half *b, int M, int N, half *c, int K,
                       matrix_b_is_col_major);
   switch (kenerl_type) {
     case FP16TensorKenerlType::TensorKenerl_16_16_16:
-      wmma_fp16_kernel_16_16_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
-                                                     k);
+      //wmma_fp16_kernel_16_16_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
+      wmma_fp16_kernel<16,16,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
     case FP16TensorKenerlType::TensorKenerl_8_32_16:
-      wmma_fp16_kernel_8_32_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
-                                                    k);
+      //wmma_fp16_kernel_8_32_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
+      wmma_fp16_kernel<8,32,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
     case FP16TensorKenerlType::TensorKenerl_32_8_16:
-      wmma_fp16_kernel_32_8_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c,
-                                                    k);
+      //wmma_fp16_kernel_32_8_16<<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
+      wmma_fp16_kernel<32,8,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
   }
-  for (int i = 0; i < M; ++i) {
-    CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(float),
-                          cudaMemcpyDeviceToHost));
-  }
+  if(need_pinned_memory){
+    half* host_c;
+    CUDA_CHECK(cudaMallocHost((void**)(&host_c), M * N * sizeof(half)));
+    for (int i = 0; i < M; ++i) {
+      CUDA_CHECK(cudaMemcpy(host_c + i * N, dev_c + i * n, N * sizeof(half),
+                            cudaMemcpyDeviceToHost));
+    }    
+    memcpy(c, host_c, M * N * sizeof(half));
+    CUDA_CHECK(cudaFreeHost(host_c));
+  }else{
+    for (int i = 0; i < M; ++i) {
+      CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(half),
+                            cudaMemcpyDeviceToHost));
+    }
+  }  
   CUDA_CHECK(cudaFree(dev_a));
   CUDA_CHECK(cudaFree(dev_b));
   CUDA_CHECK(cudaFree(dev_c));

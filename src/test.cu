@@ -98,12 +98,53 @@ void test_col_major(
     printf("\n");
   }
 }
+void test_row_major_bf16(
+    BF16TensorKenerlType t = BF16TensorKenerlType::TensorKenerl_16_16_16) {
+  const int M = 15;
+  const int N = 17;
+  const int K = 17;
+  float h_a[M * K] = {0};
+  float h_b[K * N] = {0};
+  float h_c[M * N] = {0};
+
+  // Initialize original matrices with actual data
+  for (int i = 0; i < M; ++i) {
+    for (int j = 0; j < K; ++j) {
+      h_a[i * K + j] = 1;
+    }
+  }
+  for (int i = 0; i < K; ++i) {
+    for (int j = 0; j < N; ++j) {
+      h_b[i * N + j] = 1;
+    }
+  }
+  /*
+   *   B = | 1.0 | 1.0 | 1.0 | 1.0 | 1.0 | ...
+   *       | 1.0 | 1.0 | 1.0 | 1.0 | 1.0 | ...
+   *       | 1.0 | 1.0 | 1.0 | 1.0 | 1.0 | ...
+   *       | 1.0 | 1.0 | 1.0 | 1.0 | 1.0 | ...
+   *       | 1.0 | 1.0 | 1.0 | 1.0 | 1.0 | ...
+   *       | 1.0 | 1.0 | 1.0 | 1.0 | 1.0 | ...
+   *       |  .  |  .  |  .  |  .  |  .  | ...
+   *       |  .  |  .  |  .  |  .  |  .  | ...
+   *       |  .  |  .  |  .  |  .  |  .  | ...
+   */
+  wmma_bf16(h_a, h_b, M, N, h_c, K, false, t);
+
+  // Print the result
+  for (int i = 0; i < M; ++i) {
+    for (int j = 0; j < N; ++j) {
+      printf("%-2d ", static_cast<int>(h_c[i * N + j]));
+    }
+    printf("\n");
+  }
+}
 int main() {
-  test_row_major(FP16TensorKenerlType::TensorKenerl_8_32_16);
-  // printf("\n");
-  // printf("-------------------------\n");
-  // printf("\n");
-  // test_col_major();
+  test_row_major_bf16();
+  printf("\n");
+  printf("-------------------------\n");
+  printf("\n");
+  test_col_major();
 
   return 0;
 }

@@ -1,2 +1,6 @@
 2024/06/04
 完善fp16接口，新增了bf16的接口，留个模板，日后进一步精简代码，TensorKenerlType改成强类型枚举
+
+2024/0605
+Cmake添加bf16编译，删去忘记删掉的tensorRT的库链接，用模板精简代码。
+增强need_pinned_memory参数，默认为true，当传进来的a,b,c已经是在锁页内存上时，可以为false避免不必要的拷贝

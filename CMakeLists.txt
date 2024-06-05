@@ -47,12 +47,13 @@ output_dirs_setup()
 set(CMAKE_CUDA_ARCHITECTURES "80")
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 LINK_DIRECTORIES(${LIB_DIR})
-LINK_LIBRARIES(${CUDA_LIBRARIES} cublas nvinfer nvinfer_plugin nvonnxparser nvparsers)
+LINK_LIBRARIES(${CUDA_LIBRARIES} cublas)
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
 set(gemm_src
 "${CMAKE_SOURCE_DIR}/src/common.cu"
 "${CMAKE_SOURCE_DIR}/src/wmma/gemm_fp16.cu"
+"${CMAKE_SOURCE_DIR}/src/wmma/gemm_bf16.cu"
 )
 add_library(gemm SHARED ${gemm_src})
 target_compile_definitions(gemm PRIVATE BUILDING_DLL)
