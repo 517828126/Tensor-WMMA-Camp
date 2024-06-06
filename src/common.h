@@ -79,22 +79,12 @@ void data_pre(dim3& grid, int& m, int& n, int& k, int kenerl_m, int kenerl_n,
 template <typename A, typename B, typename T>
 void copy_and_cast_data_to_device(const A* a, const B* b, int M, int N, int K,
                                   T* dev_a, T* dev_b, int m, int n, int k,
-                                  bool matrix_b_is_col_major,bool need_pinned_memory=true) {
+                                  bool matrix_b_is_col_major) {
   int block_a = (m * k + WARP_SIZE - 1) / WARP_SIZE;
   int block_b = (k * n + WARP_SIZE - 1) / WARP_SIZE;
 
-  A* host_a;
-  B* host_b;
-  if(need_pinned_memory){
-    cudaMallocHost((void**)(&host_a), M * K * sizeof(A));
-    cudaMallocHost((void**)(&host_b), K * N * sizeof(B));
-    memcpy(host_a, a, M * K * sizeof(A));
-    memcpy(host_b, b, K * N * sizeof(B));
-  }else{
-    host_a = const_cast<A*>(a);
-    host_b = const_cast<B*>(b);
-  }
-
+  const A* host_a = a;
+  const B* host_b = b;
 
   A* dev_src_a;
   B* dev_src_b;
@@ -122,27 +112,15 @@ void copy_and_cast_data_to_device(const A* a, const B* b, int M, int N, int K,
   }
   CUDA_CHECK(cudaFree(dev_src_a));
   CUDA_CHECK(cudaFree(dev_src_b));
-  if(need_pinned_memory){
-    CUDA_CHECK(cudaFreeHost(host_a));
-    CUDA_CHECK(cudaFreeHost(host_b));
-  }
 }
 
 template <typename A, typename B>
 void copy_data_to_device(const A* a,const B* b, int M, int N, int K, A* dev_a,
                          B* dev_b, int m, int n, int k,
-                         bool matrix_b_is_col_major,bool need_pinned_memory=true) {
-  A* host_a;
-  B* host_b;
-  if(need_pinned_memory){
-    cudaMallocHost((void**)(&host_a), M * K * sizeof(A));
-    cudaMallocHost((void**)(&host_b), K * N * sizeof(B));
-    memcpy(host_a, a, M * K * sizeof(A));
-    memcpy(host_b, b, K * N * sizeof(B));
-  }else{
-    host_a = const_cast<A*>(a);
-    host_b = const_cast<B*>(b);
-  }
+                         bool matrix_b_is_col_major) {
+  const A* host_a = a;
+  const B* host_b = b;
+
   for (int i = 0; i < M; ++i) {
     CUDA_CHECK(cudaMemcpy(dev_a + i * k, host_a + i * K, K * sizeof(A),
                           cudaMemcpyHostToDevice));
@@ -163,11 +141,6 @@ void copy_data_to_device(const A* a,const B* b, int M, int N, int K, A* dev_a,
       CUDA_CHECK(cudaMemcpy(dev_b + i * k, host_b + i * K, K * sizeof(float),
                             cudaMemcpyHostToDevice));
     }
-  }
-
-  if(need_pinned_memory){
-    CUDA_CHECK(cudaFreeHost(host_a));
-    CUDA_CHECK(cudaFreeHost(host_b));
   }
 }
 

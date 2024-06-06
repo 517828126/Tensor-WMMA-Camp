@@ -185,7 +185,7 @@ __global__ void wmma_fp16_kernel(const half *a, const half *b, int M, int N,
 // }
 
 int wmma_fp16(const float *a, const float *b, int M, int N, float *c, int K,
-              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type,bool need_pinned_memory) {
+              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type) {
   if (M < 0 || N < 0 || K < 0) {
     return -1;
   }
@@ -232,21 +232,12 @@ int wmma_fp16(const float *a, const float *b, int M, int N, float *c, int K,
       wmma_fp16_kernel<32,8,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
   }
-  if(need_pinned_memory){
-    float* host_c;
-    CUDA_CHECK(cudaMallocHost((void**)(&host_c), M * N * sizeof(float)));
-    for (int i = 0; i < M; ++i) {
-      CUDA_CHECK(cudaMemcpy(host_c + i * N, dev_c + i * n, N * sizeof(float),
-                            cudaMemcpyDeviceToHost));
-    }    
-    memcpy(c, host_c, M * N * sizeof(float));
-    CUDA_CHECK(cudaFreeHost(host_c));
-  }else{
-    for (int i = 0; i < M; ++i) {
-      CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(float),
-                            cudaMemcpyDeviceToHost));
-    }
+
+  for (int i = 0; i < M; ++i) {
+    CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(float),
+                          cudaMemcpyDeviceToHost));
   }
+  
   CUDA_CHECK(cudaFree(dev_a));
   CUDA_CHECK(cudaFree(dev_b));
   CUDA_CHECK(cudaFree(dev_c));
@@ -254,7 +245,7 @@ int wmma_fp16(const float *a, const float *b, int M, int N, float *c, int K,
 }
 
 int wmma_fp16(const half *a, const half *b, int M, int N, float *c, int K,
-              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type,bool need_pinned_memory) {
+              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type) {
   if (M < 0 || N < 0 || K < 0) {
     return -1;
   }
@@ -300,21 +291,12 @@ int wmma_fp16(const half *a, const half *b, int M, int N, float *c, int K,
       wmma_fp16_kernel<32,8,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
   }
-  if(need_pinned_memory){
-    float* host_c;
-    CUDA_CHECK(cudaMallocHost((void**)(&host_c), M * N * sizeof(float)));
-    for (int i = 0; i < M; ++i) {
-      CUDA_CHECK(cudaMemcpy(host_c + i * N, dev_c + i * n, N * sizeof(float),
-                            cudaMemcpyDeviceToHost));
-    }    
-    memcpy(c, host_c, M * N * sizeof(float));
-    CUDA_CHECK(cudaFreeHost(host_c));
-  }else{
-    for (int i = 0; i < M; ++i) {
-      CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(float),
-                            cudaMemcpyDeviceToHost));
-    }
-  }  
+
+  for (int i = 0; i < M; ++i) {
+    CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(float),
+                          cudaMemcpyDeviceToHost));
+  }
+    
   CUDA_CHECK(cudaFree(dev_a));
   CUDA_CHECK(cudaFree(dev_b));
   CUDA_CHECK(cudaFree(dev_c));
@@ -322,7 +304,7 @@ int wmma_fp16(const half *a, const half *b, int M, int N, float *c, int K,
 }
 
 int wmma_fp16(const half *a, const half *b, int M, int N, half *c, int K,
-              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type,bool need_pinned_memory) {
+              bool matrix_b_is_col_major, FP16TensorKenerlType kenerl_type) {
   if (M < 0 || N < 0 || K < 0) {
     return -1;
   }
@@ -371,21 +353,12 @@ int wmma_fp16(const half *a, const half *b, int M, int N, half *c, int K,
       wmma_fp16_kernel<32,8,16><<<grid, WARP_SIZE>>>(dev_a, dev_b, m, n, dev_c, k);
       break;
   }
-  if(need_pinned_memory){
-    half* host_c;
-    CUDA_CHECK(cudaMallocHost((void**)(&host_c), M * N * sizeof(half)));
-    for (int i = 0; i < M; ++i) {
-      CUDA_CHECK(cudaMemcpy(host_c + i * N, dev_c + i * n, N * sizeof(half),
-                            cudaMemcpyDeviceToHost));
-    }    
-    memcpy(c, host_c, M * N * sizeof(half));
-    CUDA_CHECK(cudaFreeHost(host_c));
-  }else{
-    for (int i = 0; i < M; ++i) {
-      CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(half),
-                            cudaMemcpyDeviceToHost));
-    }
-  }  
+
+  for (int i = 0; i < M; ++i) {
+    CUDA_CHECK(cudaMemcpy(c + i * N, dev_c + i * n, N * sizeof(half),
+                          cudaMemcpyDeviceToHost));
+  }
+    
   CUDA_CHECK(cudaFree(dev_a));
   CUDA_CHECK(cudaFree(dev_b));
   CUDA_CHECK(cudaFree(dev_c));
