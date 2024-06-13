@@ -1,5 +1,8 @@
 2024/06/04
 完善fp16接口，新增了bf16的接口，留个模板，日后进一步精简代码，TensorKenerlType改成强类型枚举
 
-2024/0605
+2024/06/05
 Cmake添加bf16编译，删去忘记删掉的tensorRT的库链接，用模板精简代码。
+
+2024/06/13
+用模板精简代码，优化内存读写速度，后面准备使用memcpy2D进一步提高性能。另外发现common.h中data_cast函数如果声明与定义分离，就无法被第三方调用，test.cu中test_complier核函数会链接失败，无论用extern修饰还是__declspec(dllexport)修饰都不行，先改成内联。

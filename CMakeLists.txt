@@ -51,7 +51,6 @@ LINK_LIBRARIES(${CUDA_LIBRARIES} cublas)
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
 set(gemm_src
-"${CMAKE_SOURCE_DIR}/src/common.cu"
 "${CMAKE_SOURCE_DIR}/src/wmma/gemm_fp16.cu"
 "${CMAKE_SOURCE_DIR}/src/wmma/gemm_bf16.cu"
 )

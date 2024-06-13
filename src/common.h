@@ -12,135 +12,115 @@ enum class BF16TensorKenerlType {
   TensorKenerl_8_32_16,
   TensorKenerl_32_8_16
 };
-template <typename A, typename B>
-__device__ void data_cast(const A& src, B& dst) {
-  dst = static_cast<B>(src);
+
+__device__ void inline data_cast(const float& src, half& dst) {
+  dst = __float2half(src);
+}
+__device__ void inline data_cast(const half& src, float& dst) {
+  dst = __half2float(src);
+}
+__device__ void inline data_cast(const double& src, half& dst) {
+  dst = __double2half(src);
+}
+__device__ void inline data_cast(const float& src, __nv_bfloat16& dst) {
+  dst = __float2bfloat16(src);
+}
+__device__ void inline data_cast(const double& src, __nv_bfloat16& dst) {
+  dst = __double2bfloat16(src);
 }
 
-template <>
-__device__ void data_cast(const float& src, half& dst);
-
-template <>
-__device__ void data_cast(const double& src, half& dst);
-
-template <>
-__device__ void data_cast(const float& src, __nv_bfloat16& dst);
-
-template <>
-__device__ void data_cast(const double& src, __nv_bfloat16& dst);
-
-template <typename T>
-__global__ void matrix_transpose_kernel(T* dst, const T* src, size_t row,
-                                        size_t col) {
+template <typename A, typename B>
+__global__ void data_preprocess_kernel(B* dst, size_t dpitch, const A* src,
+                                       size_t spitch, size_t row, size_t col,
+                                       bool transpose) {
   size_t idx = blockDim.x * blockIdx.x + threadIdx.x;
   size_t i = idx / col;
   size_t j = idx % col;
   if (i >= row || j >= col) {
     return;
   }
-  dst[j * row + i] = src[i * col + j];
-}
-
-template <typename A, typename B>
-__global__ void matrix_cast_kernel(B* dst, const A* src, size_t row, size_t col,
-                                   bool transpose) {
-  size_t idx = blockDim.x * blockIdx.x + threadIdx.x;
-  size_t i = idx / col;
-  size_t j = idx % col;
-  if (i >= row || j >= col) {
-    return;
-  }
+  const A* src_row = (const A*)((const char*)src + i * spitch);
   if (transpose) {
-    data_cast(src[i * col + j], dst[j * row + i]);
+    B* dst_row = (B*)((char*)dst + j * dpitch);
+    data_cast(src_row[j], dst_row[i]);
   } else {
-    data_cast(src[i * col + j], dst[i * col + j]);
+    B* dst_row = (B*)((char*)dst + i * dpitch);
+    data_cast(src_row[j], dst_row[j]);
   }
 }
 
-template <typename A, typename B, typename C>
-void data_pre(dim3& grid, int& m, int& n, int& k, int kenerl_m, int kenerl_n,
-              int kenerl_k, A** dev_a, B** dev_b, C** dev_c) {
-  m = (m + kenerl_m - 1) / kenerl_m;
-  n = (n + kenerl_n - 1) / kenerl_n;
-  k = (k + kenerl_k - 1) / kenerl_k;
+template <typename A>
+__global__ void data_preprocess_kernel(A* dst, size_t dpitch, const A* src,
+                                       size_t spitch, size_t row, size_t col,
+                                       bool transpose) {
+  size_t idx = blockDim.x * blockIdx.x + threadIdx.x;
+  size_t i = idx / col;
+  size_t j = idx % col;
+  if (i >= row || j >= col) {
+    return;
+  }
+  const A* src_row = (const A*)((const char*)src + i * spitch);
+  if (transpose) {
+    A* dst_row = (A*)((char*)dst + j * dpitch);
+    dst_row[i] = src_row[j];
+  } else {
+    A* dst_row = (A*)((char*)dst + i * dpitch);
+    dst_row[j] = src_row[j];
+  }
+}
+
+template <typename SRC_A, typename SRC_B, typename DEV_A, typename DEV_B,
+          typename DEV_C>
+void data_preprocess(dim3& grid, const SRC_A* a, const SRC_B* b, const int M,
+                     const int N, const int K, DEV_A*& dev_a, DEV_B*& dev_b,
+                     DEV_C*& dev_c, int& m, int& n, int& k, int kenerl_m,
+                     int kenerl_n, int kenerl_k, bool matrix_b_is_col_major) {
+  m = (M + kenerl_m - 1) / kenerl_m;
+  n = (N + kenerl_n - 1) / kenerl_n;
+  k = (K + kenerl_k - 1) / kenerl_k;
   grid.y = m;
   grid.x = n;
   m *= kenerl_m;
   n *= kenerl_n;
   k *= kenerl_k;
-  CUDA_CHECK(cudaMalloc((void**)(dev_a), m * k * sizeof(A)));
-  CUDA_CHECK(cudaMalloc((void**)(dev_b), k * n * sizeof(B)));
-  CUDA_CHECK(cudaMalloc((void**)(dev_c), m * n * sizeof(C)));
-  cudaMemset(dev_a, 0, m * k * sizeof(A));
-  cudaMemset(dev_b, 0, k * n * sizeof(B));
-  cudaMemset(dev_c, 0, m * n * sizeof(C));
-}
-
-template <typename A, typename B, typename T>
-void copy_and_cast_data_to_device(const A* a, const B* b, int M, int N, int K,
-                                  T* dev_a, T* dev_b, int m, int n, int k,
-                                  bool matrix_b_is_col_major) {
-  int block_a = (m * k + WARP_SIZE - 1) / WARP_SIZE;
-  int block_b = (k * n + WARP_SIZE - 1) / WARP_SIZE;
-
-  const A* host_a = a;
-  const B* host_b = b;
-
-  A* dev_src_a;
-  B* dev_src_b;
-  CUDA_CHECK(cudaMalloc((void**)(&dev_src_a), m * k * sizeof(A)));
-  CUDA_CHECK(cudaMalloc((void**)(&dev_src_b), k * n * sizeof(B)));
-  cudaMemset(dev_src_a, 0, m * k * sizeof(A));
-  cudaMemset(dev_src_b, 0, k * n * sizeof(B));
-  for (int i = 0; i < M; ++i) {
-    CUDA_CHECK(cudaMemcpy(dev_src_a + i * k, host_a + i * K, K * sizeof(A),
-                          cudaMemcpyHostToDevice));
-  }
-  matrix_cast_kernel<<<block_a, WARP_SIZE>>>(dev_a, dev_src_a, m, k, false);
-  if (!matrix_b_is_col_major) {
-    for (int i = 0; i < K; ++i) {
-      CUDA_CHECK(cudaMemcpy(dev_src_b + i * n, host_b + i * N,
-                            N * sizeof(float), cudaMemcpyHostToDevice));
-    }
-    matrix_cast_kernel<<<block_b, WARP_SIZE>>>(dev_b, dev_src_b, k, n, true);
+  CUDA_CHECK(cudaMalloc((void**)(&dev_a), m * k * sizeof(DEV_A)));
+  CUDA_CHECK(cudaMalloc((void**)(&dev_b), k * n * sizeof(DEV_B)));
+  CUDA_CHECK(cudaMalloc((void**)(&dev_c), m * n * sizeof(DEV_C)));
+  cudaMemset(dev_a, 0, m * k * sizeof(DEV_A));
+  cudaMemset(dev_b, 0, k * n * sizeof(DEV_B));
+  cudaMemset(dev_c, 0, m * n * sizeof(DEV_C));
+  if (std::is_same_v<SRC_A, DEV_A> && (M == m && K == k)) {
+    CUDA_CHECK(
+        cudaMemcpy(dev_a, a, m * k * sizeof(SRC_A), cudaMemcpyHostToDevice));
   } else {
-    for (int i = 0; i < N; ++i) {
-      CUDA_CHECK(cudaMemcpy(dev_src_b + i * k, host_b + i * K,
-                            K * sizeof(float), cudaMemcpyHostToDevice));
-    }
-    matrix_cast_kernel<<<block_b, WARP_SIZE>>>(dev_b, dev_src_b, k, n, false);
+    SRC_A* dev_src;
+    CUDA_CHECK(cudaMalloc((void**)(&dev_src), M * K * sizeof(SRC_A)));
+    CUDA_CHECK(
+        cudaMemcpy(dev_src, a, M * K * sizeof(SRC_A), cudaMemcpyHostToDevice));
+    int block = ((M * K + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+    data_preprocess_kernel<<<block, WARP_SIZE>>>(
+        dev_a, k * sizeof(DEV_A), dev_src, K * sizeof(SRC_A), M, K, false);
+    cudaFree(dev_src);
   }
-  CUDA_CHECK(cudaFree(dev_src_a));
-  CUDA_CHECK(cudaFree(dev_src_b));
-}
 
-template <typename A, typename B>
-void copy_data_to_device(const A* a,const B* b, int M, int N, int K, A* dev_a,
-                         B* dev_b, int m, int n, int k,
-                         bool matrix_b_is_col_major) {
-  const A* host_a = a;
-  const B* host_b = b;
-
-  for (int i = 0; i < M; ++i) {
-    CUDA_CHECK(cudaMemcpy(dev_a + i * k, host_a + i * K, K * sizeof(A),
-                          cudaMemcpyHostToDevice));
-  }
-  if (!matrix_b_is_col_major) {
-    B* dev_src_b;
-    CUDA_CHECK(cudaMalloc((void**)(&dev_src_b), k * n * sizeof(B)));
-    cudaMemset(dev_src_b, 0, k * n * sizeof(B));
-    for (int i = 0; i < K; ++i) {
-      CUDA_CHECK(cudaMemcpy(dev_src_b + i * n, host_b + i * N,
-                            N * sizeof(float), cudaMemcpyHostToDevice));
-    }
-    int block_b = (k * n + WARP_SIZE - 1) / WARP_SIZE;
-    matrix_transpose_kernel<<<block_b, WARP_SIZE>>>(dev_b, dev_src_b, k, n);
-    CUDA_CHECK(cudaFree(dev_src_b));
+  if (std::is_same_v<SRC_B, DEV_B> && (K == k && N == n) &&
+      matrix_b_is_col_major) {
+    CUDA_CHECK(
+        cudaMemcpy(dev_b, b, k * n * sizeof(DEV_B), cudaMemcpyHostToDevice));
   } else {
-    for (int i = 0; i < N; ++i) {
-      CUDA_CHECK(cudaMemcpy(dev_b + i * k, host_b + i * K, K * sizeof(float),
-                            cudaMemcpyHostToDevice));
+    SRC_B* dev_src;
+    CUDA_CHECK(cudaMalloc((void**)(&dev_src), K * N * sizeof(SRC_B)));
+    CUDA_CHECK(
+        cudaMemcpy(dev_src, b, K * N * sizeof(SRC_B), cudaMemcpyHostToDevice));
+    int block = ((K * N + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+    if (matrix_b_is_col_major) {
+      data_preprocess_kernel<<<block, WARP_SIZE>>>(
+          dev_b, n * sizeof(DEV_B), dev_src, N * sizeof(SRC_B), K, N, false);
+    } else {
+      data_preprocess_kernel<<<block, WARP_SIZE>>>(
+          dev_b, k * sizeof(DEV_B), dev_src, N * sizeof(SRC_B), K, N, true);
     }
+    cudaFree(dev_src);
   }
 }
 
