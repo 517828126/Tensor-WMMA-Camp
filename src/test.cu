@@ -4,6 +4,7 @@
 #include <cublas_v2.h>
 #include "wmma/wmma_function.h"
 #include <chrono>
+#include "stdio.h"
 using namespace nvcuda;
 #define STRH(x) #x
 #define STR(x) STRH(x)
@@ -154,32 +155,95 @@ void test_row_major_bf16(
   }
 }
 
-void test_cublas(float* a, float* b, float* c, int M, int N, int K) {
-  float* dev_a;
-  float* dev_b;
-  float* dev_c;
-  cudaMalloc((void**)(&dev_a), M * K * sizeof(float));
-  cudaMalloc((void**)(&dev_b), K * N * sizeof(float));
-  cudaMalloc((void**)(&dev_c), M * N * sizeof(float));
-  cudaMemcpy(dev_a, a, M * K * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(dev_b, b, K * N * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemset(dev_c, 0, M * N * sizeof(float));
+void test_cublas(half* a, half* b, half* c, int M, int N, int K) {
+  cudaStream_t st1, st2, st3;
+  cudaStreamCreate(&st1);
+  cudaStreamCreate(&st2);
+  cudaStreamCreate(&st3);
+  half* dev_a;
+  half* dev_b;
+  half* dev_c;
+  cudaMalloc((void**)(&dev_a), M * K * sizeof(half));
+  cudaMalloc((void**)(&dev_b), K * N * sizeof(half));
+  cudaMalloc((void**)(&dev_c), M * N * sizeof(half));
+  cudaMemcpyAsync(dev_a, a, M * K * sizeof(half), cudaMemcpyHostToDevice, st1);
+  cudaMemcpyAsync(dev_b, b, K * N * sizeof(half), cudaMemcpyHostToDevice, st2);
+  cudaMemsetAsync(dev_c, 0, M * N * sizeof(half), st3);
 
   cublasHandle_t cublasH = NULL;
   cublasCreate(&cublasH);
-  const float alpha = 1.0f;
-  const float beta = 0.0f;
-  cublasSgemm_v2(cublasH, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, dev_b, N,
-                 dev_a, K, &beta, dev_c, N);
-  cudaMemcpy(c, dev_c, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+  const half alpha = __float2half(1.0f);
+  const half beta = __float2half(0);
+  cudaStreamSynchronize(st1);
+  cudaStreamSynchronize(st2);
+  cudaStreamSynchronize(st3);
+  cublasHgemm(cublasH, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, dev_b, N,
+              dev_a, K, &beta, dev_c, N);
+  cudaMemcpy(c, dev_c, M * N * sizeof(half), cudaMemcpyDeviceToHost);
 }
 __global__ void test_complier(float* src, half* dst) { data_cast(*src, *dst); }
 int main() {
-  test_row_major();
-  printf("\n");
-  printf("-------------------------\n");
-  printf("\n");
-  test_col_major();
+  const int M = 4096;
+  const int N = 4096;
+  const int K = 4096;
+  half* a;
+  half* b;
+  half* c;
+  half* w;
+  a = new half[M * K];
+  b = new half[K * N];
+  c = new half[M * N];
+  w = new half[M * N];
+  memset(a, 0, M * K * sizeof(half));
+  memset(b, 0, K * N * sizeof(half));
+  memset(c, 0, M * N * sizeof(half));
+  memset(w, 0, M * N * sizeof(half));
+  // Initialize original matrices with actual data
+  for (int i = 0; i < M; ++i) {
+    for (int j = 0; j < K; ++j) {
+      a[i * K + j] = __float2half(1.0f);
+    }
+  }
+  for (int i = 0; i < K; ++i) {
+    for (int j = 0; j < N; ++j) {
+      if (i == 0) {
+        b[i * N + j] = __float2half(1.0f);
+      } else {
+        b[i * N + j] = 0;
+      }
+    }
+  }
+  for (int i = 0; i < 5; i++) {
+    size_t cost1, cost2, cost3;
+    {
+      auto p1 = std::chrono::high_resolution_clock::now();
+      // wmma_fp16(a, b, M, N, w, K, false,
+      //           FP16TensorKenerlType::TensorKenerl_16_16_16);
+      wmma_fp16_row(a, b, M, N, w, K, K * sizeof(half), N * sizeof(half),
+                    N * sizeof(half));
+      auto p2 = std::chrono::high_resolution_clock::now();
+      // wmma_fp16(a, b, M, N, w, K, K * sizeof(half), N * sizeof(half),
+      //           N * sizeof(half), false,
+      //           FP16TensorKenerlType::TensorKenerl_16_16_16);
+      auto p3 = std::chrono::high_resolution_clock::now();
+      cost1 = std::chrono::duration_cast<std::chrono::microseconds>(p2 - p1)
+                  .count();
+      cost2 = std::chrono::duration_cast<std::chrono::microseconds>(p3 - p2)
+                  .count();
+    }
 
+    {
+      auto p1 = std::chrono::high_resolution_clock::now();
+      test_cublas(a, b, c, M, N, K);
+      auto p2 = std::chrono::high_resolution_clock::now();
+      cost3 = std::chrono::duration_cast<std::chrono::microseconds>(p2 - p1)
+                  .count();
+    }
+    std::string cmp_ret =
+        memcmp(w, c, M * N * sizeof(half)) == 0 ? "true" : "fasle";
+
+    printf("wmma:%llu,2D wmma:%llu,cublas:%llu ,memcmp:%s\n", cost1, cost2,
+           cost3, cmp_ret.c_str());
+  }
   return 0;
 }
